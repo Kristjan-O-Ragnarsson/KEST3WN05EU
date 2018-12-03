@@ -31,9 +31,19 @@ function Make-NemName {
         [Parameter(Mandatory=$true)]
         [string]$Name
     )
+    #$Name
     $fName = Get-Name -name $Name -first
+    #$fName
     $lName = Get-Name -name $Name -last
-    $returnName = $($fName.substring(0,2)+ $lName.substring(0,2) + 1)
+    #$lName
+    $num = 1
+    #$num
+    $returnName = $($fName.substring(0,2)+ $lName.substring(0,2) + $num)
+    #$returnName
+    while((Get-ADuser -Filter {samaccountname -eq $returnName}).name -ne $null){
+        $num += 1
+        $returnName = $($fName.substring(0,2)+ $lName.substring(0,2) + $num)
+    }
     return $returnName
 
 }
@@ -61,9 +71,7 @@ function Get-Name {
         return $($x[0]+ " "+ $x[1])
     } 
     if ($last) {
-        return $x[-1]
-        }
-        
+        return $x[-1]  
     } 
     if ($full) {
         if($x[0].Length + $x[-1].Length -ge 19){
@@ -125,20 +133,20 @@ Add-DnsServerResourceRecordA -ZoneName $webdomain -Name "*" -IPv4Address $webser
 
 $dcpath = $(",dc=" + $env:USERDOMAIN + ",dc=" + $env:USERDNSDOMAIN.Split('.')[1])
 
-Install-WindowsFeature -Name DHCP -IncludeManagementTools
-Install-WindowsFeature web-server -IncludeManagementTools
+#Install-WindowsFeature -Name DHCP -IncludeManagementTools
+#Install-WindowsFeature web-server -IncludeManagementTools
 
 # ====|DHCP SCOPE|====
-Add-DhcpServerv4Scope -Name "LAN - 1" -StartRange $startRangeDHCP -EndRange $endRangeDHCP -SubnetMask $subnetMask
+#Add-DhcpServerv4Scope -Name "LAN - 1" -StartRange $startRangeDHCP -EndRange $endRangeDHCP -SubnetMask $subnetMask
 
-Set-DhcpServerv4OptionValue -DnsServer $dnsServerIp  -Router $routerIp
-Add-DhcpServerInDC $($env:COMPUTERNAME + "." + $env:USERDNSDOMAIN)
+#Set-DhcpServerv4OptionValue -DnsServer $dnsServerIp  -Router $routerIp
+#Add-DhcpServerInDC $($env:COMPUTERNAME + "." + $env:USERDNSDOMAIN)
 
 # ====|IIS|====
-New-Item $("C:\inetpub\wwwroot\www." + $webdomain) -ItemType Directory
-New-Item $("C:\inetpub\wwwroot\www." + $webdomain + "\index.html") -ItemType File -Value $("Vefsíðan www."+ $webdomain)
-New-Website -Name $("www." + $webdomain) -HostHeader $("www." + $webdomain) -PhysicalPath $("C:\inetpub\wwwroot\www." + $webdomain + "\")
-New-WebBinding -Name $("www." + $webdomain) -HostHeader $webdomain
+#New-Item $("C:\inetpub\wwwroot\www." + $webdomain) -ItemType Directory
+#New-Item $("C:\inetpub\wwwroot\www." + $webdomain + "\index.html") -ItemType File -Value $("Vefsíðan www."+ $webdomain)
+#New-Website -Name $("www." + $webdomain) -HostHeader $("www." + $webdomain) -PhysicalPath $("C:\inetpub\wwwroot\www." + $webdomain + "\")
+#New-WebBinding -Name $("www." + $webdomain) -HostHeader $webdomain
 
 # ====|JOIN WIN8 PC TO DOMAIN|====
 $passwd = ConvertTo-SecureString -AsPlainText "2015P@ssword" -Force
@@ -165,10 +173,19 @@ $users = Import-Csv .\notendur.csv
 New-ADOrganizationalUnit Notendur -ProtectedFromAccidentalDeletion $false
 New-ADGroup Allir -Path $("ou=Notendur" + $dcpath) -GroupScope Global
 foreach ($u in $users){
-    $u.Skrifstofa
+    #if($u.Braut.Substring(0,1) -eq "T"){
+    $u.Skoli
+    
 }
 foreach ($u in $users) {
     $hlutverk = $u.Hlutverk
+
+    if($u.Hlutverk -eq "Kennarar"){
+        $nm = Get-Name -name $u.nafn -full;
+    } else {
+        $nm = Make-NemName -Name $u.Nafn
+    }
+
     if((Get-ADOrganizationalUnit -Filter {name -eq $hlutverk}).name -ne $hlutverk){
         New-ADOrganizationalUnit $hlutverk -Path $("ou=Notendur" + $dcpath) -ProtectedFromAccidentalDeletion $false
         New-ADGroup $hlutverk  -Path $("ou=" + $hlutverk + ",ou=notendur" + $dcpath) -GroupScope Global
@@ -181,14 +198,29 @@ foreach ($u in $users) {
         Add-ADGroupMember -Identity $hlutverk -Members $($skoli+"_"+$hlutverk)
     }
 
-    $braut = $u.braut
-    if ((Get-ADOrganizationalUnit -SearchBase $("ou=" + $skoli + "ou=" + $hlutverk + ",ou=notendur" + $dcpath)  -Filter {name -eq $braut}).name -ne $braut) {
-        New-ADOrganizationalUnit $skoli -Path $("ou=" + $skoli + "ou=" + $hlutverk + ",ou=Notendur" + $dcpath) -ProtectedFromAccidentalDeletion $false
-        New-ADGroup $($braut+"_"+$skoli+"_"+$hlutverk)  -Path $("ou=" + $braut +"ou=" + $skoli + ",ou=" + $hlutverk + ",ou=notendur" + $dcpath) -GroupScope Global
-        Add-ADGroupMember -Identity $($skoli+"_"+$hlutverk) -Members $($skoli+"_"+$hlutverk)
-    
+    $braut = $u.braut -replace' ','_' -replace '-',''
+    if($braut.Length -gt 30){
+        $braut = $braut.Substring(0,22)
+    }
+    if ((Get-ADOrganizationalUnit -SearchBase $("ou=" + $skoli + ",ou=" + $hlutverk + ",ou=notendur" + $dcpath)  -Filter {name -eq $braut}).name -ne $braut) {
+        New-ADOrganizationalUnit $braut -Path $("ou=" + $skoli + ",ou=" + $hlutverk + ",ou=Notendur" + $dcpath) -ProtectedFromAccidentalDeletion $false
+        New-ADGroup -name $($braut+"_"+$skoli+"_"+$hlutverk)  -Path $("ou=" + $braut +",ou=" + $skoli + ",ou=" + $hlutverk + ",ou=notendur" + $dcpath) -GroupScope Global
+        Add-ADGroupMember -Identity $($skoli+"_"+$hlutverk) -Members $($braut+"_"+$skoli+"_"+$hlutverk)
+        if($braut -eq "Tölvubraut"){
+            #New-Item c:\DATA\$($braut + "_" + $u.Nafn) -ItemType Directory
+            #$rettindi = Get-Acl -Path C:\DATA\$($braut + "_" + $u.Nafn)
+            #$nyRettindi = New-Object System.Security.AccessControl.FileSystemAccessRule( $($env:USERDOMAIN + "\" + $nm), "Modify", "Allow")
+            #$rettindi.AddAccessRule($nyRettindi)
+            #$nyRettindi = New-Object System.Security.AccessControl.FileSystemAccessRule( $($env:USERDOMAIN + "\" + "kennarar*****"), "Modify", "Allow")
+            #$rettindi.AddAccessRule($nyRettindi)
 
-       # New-Item c:\DATA\$($skrifstofa + "_" + $deild) -ItemType Directory
+            #Set-Acl -Path C:\DATA\$($skrifstofa + "_" + $deild) $rettindi
+
+            #New-SmbShare -name $($skrifstofa + "_" + $deild) -Path C:\DATA\$($skrifstofa + "_" + $deild) -FullAccess Everyone
+        
+        }
+
+        #New-Item c:\DATA\$($skrifstofa + "_" + $deild) -ItemType Directory
 
         #$rettindi = Get-Acl -Path C:\DATA\$($skrifstofa + "_" + $deild)
         #$nyRettindi = New-Object System.Security.AccessControl.FileSystemAccessRule( $($env:USERDOMAIN + "\" + $deild + "_" + $skrifstofa), "Modify", "Allow")
@@ -200,25 +232,28 @@ foreach ($u in $users) {
 
         #Add-Printer -Name $($deild + "_Prentari") -DriverName "HP LaserJet 2300L PCL6 Class Driver" -PortName "LPT1:" -Shared -ShareName $($deild + "_PRINT") -Published
     }
-    if($u.Hlutverk -eq "Kennarar"){
-        $nm = Get-Name -name $u.nafn -full;
-    } else {
-        $nm = Make-NemName -Name $u.Nafn
-    }
+    
     
     $splat = @{
         "Name" = $u.Nafn;
-        "DisplayName" = $nm;
+        "DisplayName" = $u.Nafn;
         "GivenName" = Get-Name -name $u.nafn -first;
         "Surname" = Get-Name -name $u.nafn -last;
         "SamAccountName" = $nm;
         "UserPrincipalName" = $($nm + "@" + $env:USERDNSDOMAIN);
         "AccountPassword" = (ConvertTo-SecureString -AsPlainText "pass.123" -Force); 
-        "Path" = $("ou=" + $braut + "ou=" + $skoli + ",ou=" + $hlutverk + ",ou=notendur" + $dcpath); 
+        "Path" = $("ou=" + $braut + ",ou=" + $skoli + ",ou=" + $hlutverk + ",ou=notendur" + $dcpath); 
         "Enabled" = $true;
     }
-    New-ADUser @splat # -Name $u.nafn -DisplayName $u.nafn -GivenName $u.fornafn -Surname $u.eftirnafn -SamAccountName $u.notendanafn -UserPrincipalName $($u.notendanafn + "@" + $env:USERDNSDOMAIN) -AccountPassword (ConvertTo-SecureString -AsPlainText "pass.123" -Force) -Path $("ou=" + $deild + ",ou=notendur" + $dcpath) -Enabled $true
-    Add-ADGroupMember -Identity $($deild+"_"+$skrifstofa) -Members $(Get-Name -name $u.nafn -full)
+    Try{
+        New-ADUser @splat # -Name $u.nafn -DisplayName $u.nafn -GivenName $u.fornafn -Surname $u.eftirnafn -SamAccountName $u.notendanafn -UserPrincipalName $($u.notendanafn + "@" + $env:USERDNSDOMAIN) -AccountPassword (ConvertTo-SecureString -AsPlainText "pass.123" -Force) -Path $("ou=" + $deild + ",ou=notendur" + $dcpath) -Enabled $true
+        Add-ADGroupMember -Identity  $($braut+"_"+$skoli+"_"+$hlutverk) -Members $nm
+    }
+    Catch
+    {
+        $FailedItem = $_.Exception.ItemName
+        $FailedItem
+    }
     #$tmp = Replace-IcelandicCharactersInString -str Get-Name -name $u.nafn -full
     #New-Item $("C:\inetpub\wwwroot\" + $tmp) -ItemType Directory
     #New-Item $("C:\inetpub\wwwroot\" + $tmp + "\index.html") -ItemType File -Value $("Vefsíðan " + $tmp + ".eep.is")
