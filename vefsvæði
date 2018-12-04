@@ -1,0 +1,27 @@
+$dcpath = $(",dc=" + $env:USERDOMAIN + ",dc=" + $env:USERDNSDOMAIN.Split('.')[1])
+$notendurtölvubraut = Get-ADUser -Filter * -SearchBase $("ou=Tölvubraut, ou=Upplýsingatækniskolinn, ou=Nemendur, ou=Notendur" + $dcpath)
+$Kennarartölvubraut = Get-ADUser -Filter * -SearchBase $("ou=Tölvubraut, ou=Upplýsingatækniskolinn, ou=Kennarar, ou=Notendur" + $dcpath)
+foreach($tb in $notendurtölvubraut) {
+    New-Item $("C:\Data\" + $tb.samaccountname) -ItemType Directory
+    New-Item $("C:\Data\" + $tb.samaccountname + "\index.html") -ItemType File -Value $("Vefsíðan " + $tb.samaccountname + ".tskoli.is")
+    New-Website -Name $($tb.samaccountname +"." + $webdomain) -HostHeader $($tb.samaccountname +"." + $webdomain) -PhysicalPath $("C:\Data\" + $tb.samaccountname)
+    New-FsrmQuota -Path $("C:\Data\" + $tb.samaccountname)  -Description "limit usage to 50mb" -Size 50mb
+    
+    
+            $rettindi = Get-Acl -Path C:\Data\$($tb.samaccountname)
+            $nyRettindi = New-Object System.Security.AccessControl.FileSystemAccessRule( $($env:USERDOMAIN + "\Notendur\Nemendur\Upplýsingatækniskolinn\Tölvubraut\" + $tb.samaccountname), "Modify", "Allow")
+            $rettindi.AddAccessRule($nyRettindi)
+            foreach($tbk in $Kennarartölvubraut){
+            $rettindi = Get-Acl -Path C:\Data\$($tb.samaccountname)
+               $nyRettindi = New-Object System.Security.AccessControl.FileSystemAccessRule( $($env:USERDOMAIN + "\" + "Notendur"+ "\" + " Kennarar" + "\" + "Upplýsingatækniskolinn" + "\" + "Tölvubraut" + "\" + $tbk.samaccountname), "Modify", "Allow")
+            $rettindi.AddAccessRule($nyRettindi)
+            Set-Acl -Path C:\DATA\$($tb.samaccountname) $rettindi
+            }
+         
+
+            Set-Acl -Path C:\DATA\$($tb.samaccountname) $rettindi
+
+            New-SmbShare -name $($tb.samaccountname) -Path C:\DATA\$($tb.samaccountname) -FullAccess Everyone
+            set-aduser -identity $tb -HomeDrive "W:" -HomeDirectory $("\\win3a-10\" + $tb.samaccountname)
+
+}
