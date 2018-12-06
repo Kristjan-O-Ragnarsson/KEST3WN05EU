@@ -16,4 +16,9 @@ Dagbók:
 #Bug was Brautstring exceited length limit
 *added extra packs to 10
 *installed adds on 10
+06.12.18
+#59 no longer has connection to intra net[ISSUE]
+*fixed websetup script
+*confirmed smb shares work
+*Figured out how to do access controle in windows
 ----
